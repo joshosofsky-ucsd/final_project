@@ -842,7 +842,7 @@ function createSimilarPatientVisualizations(similarPatients, outcomeContainer) {
                 <div id="age-outcomes-chart"></div>
             </div>
             <div class="visualization-container">
-                <h4>Outcomes by ASA Status</h4>
+                <h4>Mortality Rate by ASA Status</h4>
                 <div id="asa-outcomes-chart"></div>
             </div>
         </div>
@@ -1005,7 +1005,7 @@ function createAgeOutcomesChart(similarPatients) {
         .attr('dy', '1em')
         .style('text-anchor', 'middle')
         .style('font-size', '10px')
-        .text('# of Patients');
+        .text('Number of Patients');
 
     svg.selectAll('.survived-bar')
         .data(data)
@@ -1111,15 +1111,6 @@ function createAsaOutcomesChart(similarPatients) {
     svg.append('g')
         .call(d3.axisLeft(yScale)
             .tickFormat(d => `${(d * 100).toFixed(0)}%`));
-
-    svg.append('text')
-        .attr('transform', 'rotate(-90)')
-        .attr('y', 0 - margin.left - 3)
-        .attr('x', 0 - (height / 2))
-        .attr('dy', '1em')
-        .style('text-anchor', 'middle')
-        .style('font-size', '10px')
-        .text('Mortality Rate');
     
     svg.selectAll('.bar')
         .data(data)
