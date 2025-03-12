@@ -782,6 +782,17 @@ function calculateComplicationRisk(patientData, outcome) {
     outcome.longerHospitalStay = complicationScore >= 3;
 }
 
+function calculateMortalityRate(patients) {
+    if (!patients || patients.length === 0) return 0;
+    const deathCount = patients.filter(patient => 
+        patient.death_inhosp === 1 ||
+        patient.mortality_label === "Died" ||
+        patient.death_inhosp === true
+    ).length;
+    return deathCount / patients.length;
+}
+
+
 /**
  * Show the surgical outcome
  * Updated to remove average hospital stay from dataset statistics
@@ -798,10 +809,17 @@ function showOutcome() {
         return;
     }
 
-    // Hide the stages and show the outcome container
+    // Hide the stages and navigation, then clear and show the outcome container
     stagesContainer.style.display = 'none';
     navigationContainer.style.display = 'none';
     outcomeContainer.style.display = 'block';
+    // Clear any previous content (this helps if the function is called more than once)
+    outcomeContainer.innerHTML = `
+        <h2>Surgery Outcome</h2>
+        <div id="outcome-status"></div>
+        <div id="outcome-factors"></div>
+        <button id="restart-btn">Start Over</button>
+    `;
 
     // Update outcome status
     const outcomeStatus = document.getElementById('outcome-status');
@@ -812,7 +830,6 @@ function showOutcome() {
                 <p class="outcome-detail">The patient recovered well with a hospital stay of ${outcome.recoveryTime} days.</p>
                 <p class="outcome-detail">Complication Risk: <span class="${outcome.complicationRisk.toLowerCase().replace(' ', '-')}">${outcome.complicationRisk}</span></p>
             `;
-
             if (outcome.icuStay) {
                 outcomeStatus.innerHTML += `
                     <p class="outcome-detail">ICU Stay Required: ${outcome.icuDays} ${outcome.icuDays === 1 ? 'day' : 'days'}</p>
@@ -828,19 +845,16 @@ function showOutcome() {
         }
     }
 
-    // Display outcome factors
+    // Update outcome factors
     const factorsContainer = document.getElementById('outcome-factors');
     if (factorsContainer) {
         factorsContainer.innerHTML = '<h3>Key Factors</h3>';
-
         outcome.factors.forEach(factor => {
             const factorElem = document.createElement('div');
             factorElem.className = 'factor';
             factorElem.textContent = factor;
             factorsContainer.appendChild(factorElem);
         });
-
-        // Add dataset statistics (without average hospital stay)
         factorsContainer.innerHTML += `
             <h3 class="dataset-stats-title">Dataset Statistics</h3>
             <div class="dataset-stats">
@@ -850,11 +864,14 @@ function showOutcome() {
         `;
     }
 
-    // Add similar patient outcome visualizations
+    // Append visualizations if there is data
     if (similarPatients.length > 0) {
         createSimilarPatientVisualizations(similarPatients, outcomeContainer);
+    } else {
+        console.warn("No similar patient data available to display visualizations.");
     }
 }
+
 
 function createSimilarPatientVisualizations(similarPatients, outcomeContainer) {
     // Create container for visualizations
@@ -895,6 +912,22 @@ function createSimilarPatientVisualizations(similarPatients, outcomeContainer) {
 }
 
 
+// =======================
+// Reusable Tooltip Setup
+// =======================
+const tooltip = d3.select('body').append('div')
+  .attr('class', 'tooltip')
+  .style('position', 'absolute')
+  .style('padding', '8px')
+  .style('background', 'rgba(0,0,0,0.7)')
+  .style('color', '#fff')
+  .style('border-radius', '4px')
+  .style('pointer-events', 'none')
+  .style('opacity', 0);
+
+// =======================
+// Mortality Chart
+// =======================
 function createMortalityChart(patients) {
     if (!patients || patients.length === 0) return;
     
@@ -937,6 +970,32 @@ function createMortalityChart(patients) {
         .attr('d', arc)
         .attr('fill', d => d.data.color);
     
+    // Interactivity for pie slices
+    slices.on('mouseover', function(event, d) {
+      d3.select(this)
+        .transition().duration(200)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2);
+      tooltip.transition().duration(200)
+        .style('opacity', 0.9);
+      tooltip.html(`<strong>${d.data.label}</strong><br>
+                    Count: ${d.data.value}<br>
+                    Percentage: ${((d.data.value / patients.length) * 100).toFixed(1)}%`)
+             .style('left', (event.pageX + 10) + 'px')
+             .style('top', (event.pageY - 28) + 'px');
+    })
+    .on('mousemove', function(event) {
+      tooltip.style('left', (event.pageX + 10) + 'px')
+             .style('top', (event.pageY - 28) + 'px');
+    })
+    .on('mouseout', function() {
+      d3.select(this)
+        .transition().duration(200)
+        .attr('stroke', 'none');
+      tooltip.transition().duration(200)
+        .style('opacity', 0);
+    });
+    
     svg.selectAll('text')
         .data(pie(data))
         .enter()
@@ -968,11 +1027,12 @@ function createMortalityChart(patients) {
     });
 }
 
-
+// =======================
+// Length of Stay Chart
+// =======================
 function createLengthOfStayChart(similarPatients) {
     if (!similarPatients || similarPatients.length === 0) return;
     
-    // Filter out patients with missing or invalid LOS data
     const validPatients = similarPatients.filter(p => 
         p.los_postop !== null && 
         p.los_postop !== undefined && 
@@ -981,8 +1041,7 @@ function createLengthOfStayChart(similarPatients) {
     );
     
     if (validPatients.length === 0) {
-        // No valid data to display
-        const noDataMsg = d3.select('#los-chart')
+        d3.select('#los-chart')
             .append('div')
             .attr('class', 'no-data-message')
             .text('No length of stay data available');
@@ -1035,7 +1094,28 @@ function createLengthOfStayChart(similarPatients) {
         .attr('y', d => yScale(d.count))
         .attr('width', xScale.bandwidth())
         .attr('height', d => height - yScale(d.count))
-        .attr('fill', '#3498db');
+        .attr('fill', '#3498db')
+        .on('mouseover', function(event, d) {
+            d3.select(this)
+              .transition().duration(200)
+              .attr('fill', '#2c3e50');
+            tooltip.transition().duration(200)
+              .style('opacity', 0.9);
+            tooltip.html(`<strong>${d.label}</strong><br>Count: ${d.count}`)
+                   .style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mousemove', function(event) {
+            tooltip.style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function() {
+            d3.select(this)
+              .transition().duration(200)
+              .attr('fill', '#3498db');
+            tooltip.transition().duration(200)
+              .style('opacity', 0);
+        });
     
     svg.append('g')
         .attr('transform', `translate(0,${height})`)
@@ -1066,6 +1146,9 @@ function createLengthOfStayChart(similarPatients) {
         .html(`<span>Mean: ${meanLOS} days</span> | <span>Median: ${medianLOS} days</span>`);
 }
 
+// =======================
+// Age Outcomes Chart
+// =======================
 function createAgeOutcomesChart(similarPatients) {
     if (!similarPatients || similarPatients.length === 0) return;
 
@@ -1121,7 +1204,6 @@ function createAgeOutcomesChart(similarPatients) {
         .domain([0, d3.max(data, d => d.survived + d.died)])
         .range([height, 0]);
 
-
     svg.append('g')
         .attr('transform', `translate(0,${height})`)
         .call(d3.axisBottom(xScale))
@@ -1140,6 +1222,7 @@ function createAgeOutcomesChart(similarPatients) {
         .style('font-size', '10px')
         .text('Number of Patients');
 
+    // Died bars (bottom)
     svg.selectAll('.died-bar')
         .data(data)
         .enter()
@@ -1149,8 +1232,26 @@ function createAgeOutcomesChart(similarPatients) {
         .attr('width', xScale.bandwidth())
         .attr('y', d => yScale(d.died + d.survived))
         .attr('height', d => height - yScale(d.died))
-        .attr('fill', '#e74c3c');
+        .attr('fill', '#e74c3c')
+        .on('mouseover', function(event, d) {
+            d3.select(this).transition().duration(200).attr('opacity', 0.7);
+            tooltip.transition().duration(200).style('opacity', 0.9);
+            tooltip.html(`<strong>${d.ageGroup}</strong><br>
+                          Died: ${d.died}<br>
+                          Total: ${d.total}`)
+                   .style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mousemove', function(event) {
+            tooltip.style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function() {
+            d3.select(this).transition().duration(200).attr('opacity', 1);
+            tooltip.transition().duration(200).style('opacity', 0);
+        });
 
+    // Survived bars (on top)
     svg.selectAll('.survived-bar')
         .data(data)
         .enter()
@@ -1160,8 +1261,24 @@ function createAgeOutcomesChart(similarPatients) {
         .attr('width', xScale.bandwidth())
         .attr('y', d => yScale(d.survived))
         .attr('height', d => d.survived > 0 ? height - yScale(d.survived) : 0)
-        .attr('fill', '#4cd137');
-
+        .attr('fill', '#4cd137')
+        .on('mouseover', function(event, d) {
+            d3.select(this).transition().duration(200).attr('opacity', 0.7);
+            tooltip.transition().duration(200).style('opacity', 0.9);
+            tooltip.html(`<strong>${d.ageGroup}</strong><br>
+                          Survived: ${d.survived}<br>
+                          Total: ${d.total}`)
+                   .style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mousemove', function(event) {
+            tooltip.style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function() {
+            d3.select(this).transition().duration(200).attr('opacity', 1);
+            tooltip.transition().duration(200).style('opacity', 0);
+        });
 
     svg.selectAll('.combined-label')
         .data(data)
@@ -1184,6 +1301,7 @@ function createAgeOutcomesChart(similarPatients) {
                 return '';
             }
         });
+
     const legend = d3.select('#age-outcomes-chart')
         .append('div')
         .attr('class', 'chart-legend');
@@ -1206,6 +1324,9 @@ function createAgeOutcomesChart(similarPatients) {
     });
 }
 
+// =======================
+// ASA Outcomes Chart
+// =======================
 function createAsaOutcomesChart(similarPatients) {
     if (!similarPatients || similarPatients.length === 0) return;
 
@@ -1275,7 +1396,31 @@ function createAsaOutcomesChart(similarPatients) {
         .attr('width', xScale.bandwidth())
         .attr('y', d => yScale(d.mortalityRate))
         .attr('height', d => height - yScale(d.mortalityRate))
-        .attr('fill', d => d.mortalityRate > 0.2 ? '#e74c3c' : '#f39c12');
+        .attr('fill', d => d.mortalityRate > 0.2 ? '#e74c3c' : '#f39c12')
+        .on('mouseover', function(event, d) {
+            d3.select(this)
+              .transition().duration(200)
+              .attr('fill', '#2c3e50');
+            tooltip.transition().duration(200)
+              .style('opacity', 0.9);
+            tooltip.html(`<strong>${d.asa}</strong><br>
+                          Mortality Rate: ${(d.mortalityRate * 100).toFixed(1)}%<br>
+                          Survived: ${d.survived}<br>
+                          Deceased: ${d.died}`)
+                   .style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mousemove', function(event) {
+            tooltip.style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function(d) {
+            d3.select(this)
+              .transition().duration(200)
+              .attr('fill', d => d.mortalityRate > 0.2 ? '#e74c3c' : '#f39c12');
+            tooltip.transition().duration(200)
+              .style('opacity', 0);
+        });
     
     svg.selectAll('.bar-label')
         .data(data)
@@ -1289,38 +1434,6 @@ function createAsaOutcomesChart(similarPatients) {
         .style('font-size', '9px');
 }
 
-function calculateMortalityRiskByDemographics(patientData) {
-    let mortalityRisk = 0.01;
-
-    if (patientData.age > 80) mortalityRisk += 0.04;
-    else if (patientData.age > 70) mortalityRisk += 0.025;
-    else if (patientData.age > 60) mortalityRisk += 0.015;
-
-    mortalityRisk += (patientData.asa - 1) * 0.015;
-
-    if (patientData.department === "Thoracic surgery") mortalityRisk += 0.01;
-
-    if (patientData.approach === "Open") mortalityRisk += 0.01;
-
-    if (patientData.bmi > 35 || patientData.bmi < 18.5) mortalityRisk += 0.01;
-
-    if (patientData.emop) mortalityRisk += 0.03;
-
-    console.log(`Calculated mortality risk: ${(mortalityRisk * 100).toFixed(1)}%`);
-    return mortalityRisk;
-}
-
-function calculateMortalityRate(patients) {
-    if (!patients || patients.length === 0) return 0;
-    
-    const deathCount = patients.filter(patient => 
-        patient.death_inhosp === 1 || 
-        patient.mortality_label === "Died" || 
-        patient.death_inhosp === true
-    ).length;
-    
-    return deathCount / patients.length;
-}
 
 function calculateAverageLOS(patients) {
     if (!patients || patients.length === 0) return "N/A";
