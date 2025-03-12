@@ -411,7 +411,7 @@ function animateSurgeryProgress() {
         const hours = Math.floor(simulatedElapsedSeconds / 3600);
         const minutes = Math.floor((simulatedElapsedSeconds % 3600) / 60);
 
-        progressTime.textContent = `Time elapsed: ${hours}:${minutes.toString().padStart(2, '0')}`;
+        progressTime.textContent = `Time elapsed: ${hours}:${minutes.toString().padStart(2, '0')} (1 second = 1 minute)`;
 
         if (progress < 100 && document.getElementById('during-op').classList.contains('active')) {
             requestAnimationFrame(updateProgress);
