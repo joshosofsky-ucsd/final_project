@@ -932,6 +932,100 @@ function createMortalityChart(patients) {
 
 
 function createLengthOfStayChart(similarPatients) {
+    if (!similarPatients || similarPatients.length === 0) return;
+    
+    // Filter out patients with missing or invalid LOS data
+    const validPatients = similarPatients.filter(p => 
+        p.los_postop !== null && 
+        p.los_postop !== undefined && 
+        !isNaN(p.los_postop) && 
+        p.los_postop >= 0
+    );
+    
+    if (validPatients.length === 0) {
+        // No valid data to display
+        const noDataMsg = d3.select('#los-chart')
+            .append('div')
+            .attr('class', 'no-data-message')
+            .text('No length of stay data available');
+        return;
+    }
+    
+    const losCategories = [
+        { label: '0-3 days', min: 0, max: 3, count: 0 },
+        { label: '4-7 days', min: 4, max: 7, count: 0 },
+        { label: '8-14 days', min: 8, max: 14, count: 0 },
+        { label: '15+ days', min: 15, max: Infinity, count: 0 }
+    ];
+    
+    validPatients.forEach(patient => {
+        const los = patient.los_postop;
+        for (const category of losCategories) {
+            if (los >= category.min && los <= category.max) {
+                category.count++;
+                break;
+            }
+        }
+    });
+    
+    const margin = { top: 20, right: 10, bottom: 30, left: 40 };
+    const width = 200 - margin.left - margin.right;
+    const height = 180 - margin.top - margin.bottom;
+    
+    const svg = d3.select('#los-chart')
+        .append('svg')
+        .attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+    
+    const xScale = d3.scaleBand()
+        .domain(losCategories.map(d => d.label))
+        .range([0, width])
+        .padding(0.2);
+    
+    const yScale = d3.scaleLinear()
+        .domain([0, d3.max(losCategories, d => d.count)])
+        .range([height, 0]);
+    
+    svg.selectAll('.bar')
+        .data(losCategories)
+        .enter()
+        .append('rect')
+        .attr('class', 'bar')
+        .attr('x', d => xScale(d.label))
+        .attr('y', d => yScale(d.count))
+        .attr('width', xScale.bandwidth())
+        .attr('height', d => height - yScale(d.count))
+        .attr('fill', '#3498db');
+    
+    svg.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll('text')
+        .style('font-size', '8px');
+    
+    svg.append('g')
+        .call(d3.axisLeft(yScale).ticks(5).tickFormat(d3.format('d')));
+    
+    svg.selectAll('.bar-label')
+        .data(losCategories)
+        .enter()
+        .append('text')
+        .attr('class', 'bar-label')
+        .attr('x', d => xScale(d.label) + xScale.bandwidth() / 2)
+        .attr('y', d => yScale(d.count) - 5)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '9px')
+        .text(d => d.count > 0 ? d.count : '');
+    
+    const meanLOS = d3.mean(validPatients, d => d.los_postop).toFixed(1);
+    const medianLOS = d3.median(validPatients, d => d.los_postop).toFixed(1);
+    
+    d3.select('#los-chart')
+        .append('div')
+        .attr('class', 'chart-stats')
+        .html(`<span>Mean: ${meanLOS} days</span> | <span>Median: ${medianLOS} days</span>`);
 }
 
 function createAgeOutcomesChart(similarPatients) {
@@ -1008,7 +1102,6 @@ function createAgeOutcomesChart(similarPatients) {
         .style('font-size', '10px')
         .text('Number of Patients');
 
-    // Draw died bars (red)
     svg.selectAll('.died-bar')
         .data(data)
         .enter()
@@ -1020,7 +1113,6 @@ function createAgeOutcomesChart(similarPatients) {
         .attr('height', d => height - yScale(d.died))
         .attr('fill', '#e74c3c');
 
-    // Draw survived bars (green)
     svg.selectAll('.survived-bar')
         .data(data)
         .enter()
@@ -1119,7 +1211,6 @@ function createAsaOutcomesChart(similarPatients) {
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
     
-    // Set up scales
     const xScale = d3.scaleBand()
         .domain(data.map(d => d.asa))
         .range([0, width])
@@ -1148,7 +1239,6 @@ function createAsaOutcomesChart(similarPatients) {
         .attr('height', d => height - yScale(d.mortalityRate))
         .attr('fill', d => d.mortalityRate > 0.2 ? '#e74c3c' : '#f39c12');
     
-    // Add labels
     svg.selectAll('.bar-label')
         .data(data)
         .enter()
@@ -1223,44 +1313,33 @@ function restartJourney() {
     // The simplest and most reliable way to restart is to reload the page
     window.location.reload();
 }
-/**
- * Initialize multi-step form navigation and events
- * Updated version with robust event listener management
- */
+
 function initializeMultiStepForm() {
     console.log("Initializing multi-step form");
     
-    // Step navigation
     setupStepNavigation();
     
-    // Start journey button - with proper event listener cleanup
     const startJourneyBtn = document.getElementById('start-journey-btn');
     if (startJourneyBtn) {
-        // Remove old listeners if any
         const newBtn = startJourneyBtn.cloneNode(true);
         startJourneyBtn.parentNode.replaceChild(newBtn, startJourneyBtn);
         
-        // Add fresh listener
         newBtn.addEventListener('click', function() {
             console.log("Start journey button clicked");
             navigateToStep('age-section');
         });
     }
     
-    // Dynamic content generation
     setupDepartmentSection();
     setupApproachSection();
     setupAnesthesiaSection();
     setupASASection();
     
-    // Final submit button - with proper event listener cleanup
     const beginVisualizationBtn = document.getElementById('begin-visualization-btn');
     if (beginVisualizationBtn) {
-        // Remove old listeners if any
         const newBtn = beginVisualizationBtn.cloneNode(true);
         beginVisualizationBtn.parentNode.replaceChild(newBtn, beginVisualizationBtn);
         
-        // Add fresh listener
         newBtn.addEventListener('click', function() {
             console.log("Begin visualization button clicked");
             processFormData();
@@ -1268,10 +1347,6 @@ function initializeMultiStepForm() {
     }
 }
 
-/**
- * Navigate to a specific step - with better error handling
- * @param {string} stepId - The ID of the step to navigate to
- */
 function navigateToStep(stepId) {
     console.log(`Navigating to step: ${stepId}`);
     
