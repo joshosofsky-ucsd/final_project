@@ -927,10 +927,25 @@ select:focus {
 .citation h4 {
     margin-top: 0;
     margin-bottom: 10px;
+    font-style: italic;
 }
 
 .citation p {
     margin-bottom: 0;
     line-height: 1.5;
     font-style: italic;
+}
+
+.avg-duration-annotation {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+}
+
+.avg-duration-annotation span {
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
 }

@@ -347,46 +347,84 @@ function animateECG(svg, line, data, xScale, yScale, width, height) {
     requestAnimationFrame(animate);
 }
 
+
 function animateSurgeryProgress() {
     const progressBar = document.getElementById('surgery-progress');
     const progressTime = document.getElementById('progress-time');
-    
+
     if (!progressBar || !progressTime) {
         console.error("Progress elements not found");
         return;
     }
-    
+
     progressBar.style.width = '0%';
-    
+
     let surgeryDuration = 7200;
+    let avgDurationText = "";
+
     if (similarPatients.length > 0) {
-        const avgDuration = similarPatients.reduce((sum, patient) => sum + (patient.surgery_duration || 0), 0) / similarPatients.length;
-        surgeryDuration = avgDuration > 0 ? avgDuration * 60 : 7200;
+        const validDurations = similarPatients.filter(patient =>
+            patient.surgery_duration !== null &&
+            patient.surgery_duration !== undefined &&
+            !isNaN(patient.surgery_duration) &&
+            patient.surgery_duration > 0
+        ).map(patient => patient.surgery_duration);
+
+        if (validDurations.length > 0) {
+            const avgDuration = validDurations.reduce((sum, duration) => sum + duration, 0) / validDurations.length;
+            surgeryDuration = avgDuration * 60;
+
+            const hours = Math.floor(avgDuration / 60);
+            const minutes = Math.round(avgDuration % 60);
+            avgDurationText = `Average surgery time: ${hours}h ${minutes}m`;
+        } else {
+            avgDurationText = "Estimated surgery time: 2h 0m";
+        }
+    } else {
+        avgDurationText = "Estimated surgery time: 2h 0m";
     }
-    
-    const animationDuration = surgeryDuration / 60;
+
+    const durationInfo = document.createElement('div');
+    durationInfo.id = 'avg-duration-info';
+    durationInfo.className = 'duration-info';
+    durationInfo.textContent = avgDurationText;
+
+    const progressContainer = progressTime.parentElement;
+
+    const existingInfo = document.getElementById('avg-duration-info');
+    if (existingInfo) {
+        existingInfo.remove();
+    }
+
+    progressContainer.insertBefore(durationInfo, progressTime.nextSibling);
+
+    const animationDuration = 60;
     const startTime = Date.now();
-    
+
     function updateProgress() {
         const elapsedTime = (Date.now() - startTime) / 1000;
         const progress = Math.min(100, (elapsedTime / animationDuration) * 100);
-        
+
         progressBar.style.width = `${progress}%`;
-        
-        const simulatedMinutes = Math.floor((progress / 100) * (surgeryDuration / 60));
-        const hours = Math.floor(simulatedMinutes / 60);
-        const minutes = simulatedMinutes % 60;
-        
+
+        const simulatedElapsedSeconds = Math.floor((progress / 100) * surgeryDuration);
+        const hours = Math.floor(simulatedElapsedSeconds / 3600);
+        const minutes = Math.floor((simulatedElapsedSeconds % 3600) / 60);
+
         progressTime.textContent = `Time elapsed: ${hours}:${minutes.toString().padStart(2, '0')}`;
-        
+
         if (progress < 100 && document.getElementById('during-op').classList.contains('active')) {
             requestAnimationFrame(updateProgress);
         } else if (progress >= 100) {
             progressBar.style.width = '100%';
-            progressTime.textContent = `Time elapsed: ${Math.floor(surgeryDuration / 3600)}:${Math.floor((surgeryDuration % 3600) / 60).toString().padStart(2, '0')}`;
+
+            // Format final time
+            const totalHours = Math.floor(surgeryDuration / 3600);
+            const totalMinutes = Math.floor((surgeryDuration % 3600) / 60);
+            progressTime.textContent = `Time elapsed: ${totalHours}:${totalMinutes.toString().padStart(2, '0')}`;
         }
     }
-    
+
     updateProgress();
 }
 
