@@ -906,3 +906,30 @@ select:focus {
         margin-bottom: 15px;
     }
 }
+
+.citation {
+    font-size: 0.85rem;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin: 15px 0;
+    color: #6c757d;
+    border-left: 2px solid #dee2e6;
+}
+
+.citation h4 {
+    margin-top: 0;
+    color: #6c757d;
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+}
+
+.citation p {
+    margin-bottom: 5px;
+    line-height: 1.4;
+}
+
+.citation em {
+    font-style: italic;
+    color: #495057;
+}
