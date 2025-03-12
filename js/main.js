@@ -936,58 +936,59 @@ function createLengthOfStayChart(similarPatients) {
 
 function createAgeOutcomesChart(similarPatients) {
     if (!similarPatients || similarPatients.length === 0) return;
-    
+
     const ageGroups = {
-        "Under 50": {survived: 0, died: 0},
-        "50-65": {survived: 0, died: 0},
-        "66-75": {survived: 0, died: 0},
-        "Over 75": {survived: 0, died: 0}
+        "Under 50": { survived: 0, died: 0 },
+        "50-65": { survived: 0, died: 0 },
+        "66-75": { survived: 0, died: 0 },
+        "Over 75": { survived: 0, died: 0 }
     };
-    
+
     similarPatients.forEach(p => {
         let ageGroup;
         if (p.age < 50) ageGroup = "Under 50";
         else if (p.age <= 65) ageGroup = "50-65";
         else if (p.age <= 75) ageGroup = "66-75";
         else ageGroup = "Over 75";
-        
+
         const died = p.death_inhosp === 1 || p.mortality_label === "Died" || p.death_inhosp === true;
-        
-        if (died) ageGroups[ageGroup].survived++;
-        else ageGroups[ageGroup].died++;
+
+        if (died) ageGroups[ageGroup].died++;
+        else ageGroups[ageGroup].survived++;
     });
-    
+
     const data = Object.entries(ageGroups).map(([ageGroup, counts]) => {
         const total = counts.survived + counts.died;
         return {
             ageGroup,
             survived: counts.survived,
             died: counts.died,
+            total: total,
             survivedPct: total > 0 ? (counts.survived / total * 100).toFixed(1) : 0,
             diedPct: total > 0 ? (counts.died / total * 100).toFixed(1) : 0
         };
     });
-    
-    const margin = {top: 20, right: 10, bottom: 30, left: 40};
+
+    const margin = { top: 20, right: 10, bottom: 30, left: 40 };
     const width = 200 - margin.left - margin.right;
     const height = 180 - margin.top - margin.bottom;
-    
+
     const svg = d3.select('#age-outcomes-chart')
         .append('svg')
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
-    
+
     const xScale = d3.scaleBand()
         .domain(data.map(d => d.ageGroup))
         .range([0, width])
         .padding(0.2);
-    
+
     const yScale = d3.scaleLinear()
         .domain([0, d3.max(data, d => d.survived + d.died)])
         .range([height, 0]);
-    
+
 
     svg.append('g')
         .attr('transform', `translate(0,${height})`)
@@ -1007,17 +1008,7 @@ function createAgeOutcomesChart(similarPatients) {
         .style('font-size', '10px')
         .text('Number of Patients');
 
-    svg.selectAll('.survived-bar')
-        .data(data)
-        .enter()
-        .append('rect')
-        .attr('class', 'survived-bar')
-        .attr('x', d => xScale(d.ageGroup))
-        .attr('width', xScale.bandwidth())
-        .attr('y', d => yScale(d.survived + d.died))
-        .attr('height', d => height - yScale(d.survived + d.died))
-        .attr('fill', '#e74c3c');
-    
+    // Draw died bars (red)
     svg.selectAll('.died-bar')
         .data(data)
         .enter()
@@ -1025,27 +1016,61 @@ function createAgeOutcomesChart(similarPatients) {
         .attr('class', 'died-bar')
         .attr('x', d => xScale(d.ageGroup))
         .attr('width', xScale.bandwidth())
-        .attr('y', d => yScale(d.died))
+        .attr('y', d => yScale(d.died + d.survived))
         .attr('height', d => height - yScale(d.died))
+        .attr('fill', '#e74c3c');
+
+    // Draw survived bars (green)
+    svg.selectAll('.survived-bar')
+        .data(data)
+        .enter()
+        .append('rect')
+        .attr('class', 'survived-bar')
+        .attr('x', d => xScale(d.ageGroup))
+        .attr('width', xScale.bandwidth())
+        .attr('y', d => yScale(d.survived))
+        .attr('height', d => d.survived > 0 ? height - yScale(d.survived) : 0)
         .attr('fill', '#4cd137');
-    
+
+
+    svg.selectAll('.combined-label')
+        .data(data)
+        .enter()
+        .append('text')
+        .attr('class', 'count-label')
+        .attr('x', d => xScale(d.ageGroup) + xScale.bandwidth() / 2)
+        .attr('y', d => yScale(d.died + d.survived) - 5)
+        .attr('text-anchor', 'middle')
+        .style('font-weight', 'bold')
+        .style('font-size', '9px')
+        .text(d => {
+            if (d.survived > 0 && d.died > 0) {
+                return `${d.survived} / ${d.died}`;
+            } else if (d.survived > 0) {
+                return `${d.survived}`;
+            } else if (d.died > 0) {
+                return `${d.died}`;
+            } else {
+                return '';
+            }
+        });
     const legend = d3.select('#age-outcomes-chart')
         .append('div')
         .attr('class', 'chart-legend');
-    
+
     const legendItems = [
-        {label: 'Survived', color: '#4cd137'},
-        {label: 'Deceased', color: '#e74c3c'}
+        { label: 'Survived', color: '#4cd137' },
+        { label: 'Deceased', color: '#e74c3c' }
     ];
-    
+
     legendItems.forEach(item => {
         const legendItem = legend.append('div')
             .attr('class', 'legend-item');
-        
+
         legendItem.append('span')
             .attr('class', 'legend-color')
             .style('background-color', item.color);
-        
+
         legendItem.append('span')
             .text(item.label);
     });
